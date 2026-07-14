@@ -3,8 +3,28 @@ import type { MonitorCellView } from "../../../electron/preload";
 import { agentErrorMessage } from "../../core/agent-error";
 import { S } from "../styles";
 import { LiveRtcPlayer } from "../LiveRtcPlayer";
+import type { AgentConfig } from "../App";
 
-export function TabMonitor() {
+function RecordingTimer({ scannedAt }: { scannedAt: string }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const start = new Date(scannedAt).getTime();
+    const update = () => {
+      const diff = Math.max(0, Math.floor((Date.now() - start) / 1000));
+      setElapsed(diff);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [scannedAt]);
+
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+  const ss = String(elapsed % 60).padStart(2, "0");
+  return <span>{mm}:{ss}</span>;
+}
+
+export function TabMonitor({ config }: { config: AgentConfig | null }) {
   const [cells, setCells] = useState<MonitorCellView[]>([]);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -13,6 +33,7 @@ export function TabMonitor() {
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [snapshotCell, setSnapshotCell] = useState<{ label: string; src: string } | null>(null);
+  const [hasIndonesianVoice, setHasIndonesianVoice] = useState<boolean>(true);
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -22,6 +43,12 @@ export function TabMonitor() {
       setLoading(true);
       setBootError(null);
       try {
+        const status = await window.BuktiScanAgent.getStatus();
+        if (activeRef.current && status) {
+          if (status.hasIndonesianVoice !== undefined) {
+            setHasIndonesianVoice(status.hasIndonesianVoice);
+          }
+        }
         await window.BuktiScanAgent.setMonitorMode(true);
         const rows = await window.BuktiScanAgent.startMonitor();
         if (activeRef.current) setCells(rows);
@@ -151,6 +178,48 @@ export function TabMonitor() {
       >
         ℹ️ <strong>Tips Monitor:</strong> Tab ini otomatis memperbesar ukuran jendela untuk memuat grid seluruh kamera. Jika Anda hanya ingin memantau satu CCTV dengan ukuran jendela normal, silakan gunakan tab <strong>Kamera</strong>.
       </div>
+      {!hasIndonesianVoice && (
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: 6,
+            color: "#b45309",
+            fontSize: 12,
+            marginBottom: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          ⚠️ <strong>Paket Suara Bahasa Indonesia tidak terdeteksi:</strong> Suara TTS saat scan akan terdengar dalam bahasa Inggris dengan logat asing.
+          <div style={{ marginTop: 4 }}>
+            <strong>Cara Install Bahasa Indonesia di Windows:</strong>
+            <ol style={{ margin: "2px 0 0", paddingLeft: 18 }}>
+              <li>Buka <strong>Settings</strong> (Pengaturan) di Windows Anda.</li>
+              <li>Pilih <strong>Time & Language</strong> -&gt; <strong>Language & Region</strong>.</li>
+              <li>Klik <strong>Add a language</strong>, cari dan pilih <strong>Bahasa Indonesia</strong>.</li>
+              <li><strong>Penting:</strong> Pastikan Anda mencentang opsi <strong>Speech / Text-to-speech</strong> sebelum mengklik tombol <strong>Install</strong>.</li>
+              <li>Setelah selesai diunduh oleh Windows, restart aplikasi BuktiScan Agent ini.</li>
+            </ol>
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                style={{
+                  ...S.btnSmall,
+                  background: "#b45309",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                onClick={() => void window.BuktiScanAgent.openSpeechSettings()}
+              >
+                ⚙️ Buka Pengaturan Bahasa Windows
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {stopError ? <p style={S.error}>{stopError}</p> : null}
       {snapshotError ? <p style={S.error}>{snapshotError}</p> : null}
       {refreshError ? <p style={S.error}>{refreshError}</p> : null}
@@ -165,7 +234,7 @@ export function TabMonitor() {
         }}
       >
         <div style={{ flex: 1, fontSize: 12, color: "#64748b" }}>
-          Live substream via go2rtc.{" "}
+          <strong>Workstation: {config?.workstationLabel || "Tidak diketahui"}</strong> · Live substream via go2rtc.{" "}
           {recCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}>{recCount} rekam aktif.</span>}
           {offlineCount > 0 && <span style={{ color: "#dc2626" }}> {offlineCount} scanner putus.</span>}
         </div>
@@ -220,7 +289,7 @@ export function TabMonitor() {
               <div
                 style={{
                   position: "absolute",
-                  top: 6,
+                  bottom: 6,
                   left: 6,
                   display: "flex",
                   flexWrap: "wrap",
@@ -231,7 +300,11 @@ export function TabMonitor() {
                 {cell.state === "recording" ? (
                   <span style={S.badgeAmber}>
                     ● REKAM {cell.invoiceNumber}
-                    {cell.remainingSec != null && ` ${cell.remainingSec}s`}
+                    {cell.scannedAt && (
+                      <span style={{ marginLeft: 6, fontWeight: 700 }}>
+                        [<RecordingTimer scannedAt={cell.scannedAt} />]
+                      </span>
+                    )}
                   </span>
                 ) : cell.state === "offline" ? (
                   <span style={S.badgeRed}>○ OFFLINE</span>
@@ -242,6 +315,11 @@ export function TabMonitor() {
                   <span style={S.badgeGreen}>Scanner OK</span>
                 ) : (
                   <span style={S.badgeRed}>Scanner putus</span>
+                )}
+                {cell.operatorUsername && (
+                  <span style={{ ...S.badgeGreen, background: "#f1f5f9", color: "#475569", borderColor: "#cbd5e1" }}>
+                    👤 {cell.operatorUsername}
+                  </span>
                 )}
               </div>
               {/* Refresh stream button */}

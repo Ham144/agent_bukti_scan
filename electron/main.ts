@@ -282,6 +282,10 @@ ipcMain.handle("agent:show-clip-in-folder", async (_evt, invoiceNumber: string) 
   }
 });
 
+ipcMain.handle("agent:open-speech-settings", async () => {
+  await shell.openExternal("ms-settings:regionlanguage");
+});
+
 ipcMain.handle("agent:stop-recording", async (_evt, scanId: string) => {
   if (!runtime) throw new Error("Agent belum siap");
   await runtime.stopRecording(scanId);

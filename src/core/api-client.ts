@@ -173,6 +173,38 @@ export class AgentApiClient {
     return res.data;
   }
 
+  async listInvoiceScans(query: {
+    page: number;
+    limit: number;
+    search?: string;
+    operator?: string;
+    workstationId?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+  }) {
+    const res = await this.http.get<{
+      items: AgentRecentScan[];
+      total: number;
+      page: number;
+      limit: number;
+    }>("/api/invoice-scan/list", {
+      headers: this.authHeaders(),
+      params: {
+        page: query.page,
+        limit: query.limit,
+        status: query.status && query.status !== "ALL" ? query.status : undefined,
+        search: query.search || undefined,
+        operator: query.operator || undefined,
+        workstationId: query.workstationId && query.workstationId !== "ALL" ? query.workstationId : undefined,
+        startDate: query.startDate || undefined,
+        endDate: query.endDate || undefined,
+      },
+    });
+    return res.data;
+  }
+
+
   async pairUsb(
     scannerConfigId: string,
     usbVendorId: number,

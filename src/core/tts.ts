@@ -30,11 +30,12 @@ export function invoiceTailDigits(invoiceNumber: string, len = 17): string {
 
 /** Gaya rekamkemas.id — singkat agar mudah didengar di gudang. */
 export function buildRecordingStartMessage(
-  _operatorUsername: string | null | undefined,
+  operatorUsername: string | null | undefined,
   invoiceNumber: string,
 ): string {
   const tail = invoiceTailDigits(invoiceNumber);
-  return tail ? `Merekam resi ${tail}` : "Merekam resi";
+  const operatorName = sanitizeOperatorName(operatorUsername);
+  return tail ? `${operatorName} merekam resi ${tail}` : `${operatorName} merekam resi`;
 }
 
 export function buildCameraDisconnectMessage(): string {
@@ -73,6 +74,8 @@ function speakWindows(
     "Add-Type -AssemblyName System.Speech",
     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer",
     "$s.SetOutputToDefaultAudioDevice()",
+    "$idVoice = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq 'id-ID' } | Select-Object -First 1",
+    "if ($idVoice) { $s.SelectVoice($idVoice.VoiceInfo.Name) }",
     "$s.Volume = $Volume",
     "$content = [System.IO.File]::ReadAllText($TextFile, [System.Text.UTF8Encoding]::new($false))",
     "$s.Speak($content)",
@@ -176,3 +179,25 @@ export function speak(
     onError?.("TTS belum didukung di macOS — gunakan Windows atau Linux");
   }
 }
+
+let indonesianVoiceCached: boolean | null = null;
+
+export function checkIndonesianVoiceWindows(): boolean {
+  if (process.platform !== "win32") return true; // non-Windows doesn't use SAPI
+  if (indonesianVoiceCached !== null) return indonesianVoiceCached;
+  try {
+    const script = `
+      Add-Type -AssemblyName System.Speech
+      $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+      $voices = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq 'id-ID' }
+      if ($voices) { exit 0 } else { exit 1 }
+    `;
+    const result = spawnSync("powershell.exe", ["-NoProfile", "-Command", script], { windowsHide: true });
+    indonesianVoiceCached = result.status === 0;
+    return indonesianVoiceCached;
+  } catch {
+    indonesianVoiceCached = false;
+    return false;
+  }
+}
+

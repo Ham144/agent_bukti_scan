@@ -34,6 +34,7 @@ export interface RuntimeStatusView {
   lastScan: string | null;
   busyMessage: string | null;
   clipsDir: string;
+  workstationLabel?: string | null;
   localClipCount?: number;
   diskFreeBytes?: number | null;
   diskLow?: boolean;
@@ -46,6 +47,7 @@ export interface RuntimeStatusView {
   lastTtsError?: string | null;
   startupError?: string | null;
   recordingMaxDurationSec?: number | null;
+  hasIndonesianVoice?: boolean;
 }
 
 export interface MonitorCellView {
@@ -62,6 +64,7 @@ export interface MonitorCellView {
   previewSrc: string;
   go2rtcBaseUrl: string;
   previewError: string | null;
+  scannedAt?: string | null;
 }
 
 export interface ActiveRecordingView {
@@ -155,6 +158,8 @@ contextBridge.exposeInMainWorld("BuktiScanAgent", {
     ipcRenderer.invoke("agent:open-clip-file", invoiceNumber) as Promise<void>,
   showClipInFolder: (invoiceNumber: string) =>
     ipcRenderer.invoke("agent:show-clip-in-folder", invoiceNumber) as Promise<void>,
+  openSpeechSettings: () =>
+    ipcRenderer.invoke("agent:open-speech-settings") as Promise<void>,
   listInvoiceScans: (query: {
     page: number;
     limit: number;
@@ -214,6 +219,7 @@ export interface BuktiScanAgentBridge {
   unpair: () => Promise<void>;
   openClipFile: (invoiceNumber: string) => Promise<void>;
   showClipInFolder: (invoiceNumber: string) => Promise<void>;
+  openSpeechSettings: () => Promise<void>;
   listInvoiceScans: (query: {
     page: number;
     limit: number;

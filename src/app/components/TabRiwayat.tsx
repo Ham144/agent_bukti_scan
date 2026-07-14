@@ -182,7 +182,7 @@ const openBrowser = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Riwayat Scan Diambil dari Scan</h2>
           
-<span className="link" onClick={openBrowser}>Untuk melihat detail</span>
+          <span className="link" style={{cursor: "pointer"}} onClick={openBrowser}>Untuk melihat detail</span>
           <button type="button" style={S.btnSmall} onClick={load} disabled={loading}>
             Refresh
           </button>

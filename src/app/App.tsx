@@ -335,7 +335,7 @@ export default function App() {
         {tab === "beranda" && (
           <TabBeranda status={status} config={config} onNavigate={setTab} />
         )}
-        {tab === "monitor" && <TabMonitor />}
+        {tab === "monitor" && <TabMonitor config={config} />}
         {tab === "kamera" && (
           <TabKamera
             cctvs={cctvs}

@@ -23,6 +23,7 @@ import {
   buildScannerDisconnectMessage,
   speak,
   TtsOptions,
+  checkIndonesianVoiceWindows,
 } from "./tts";
 
 export const AGENT_VERSION = "0.1.3";
@@ -50,6 +51,7 @@ export interface MonitorCellStatus {
   previewSrc: string;
   go2rtcBaseUrl: string;
   previewError: string | null;
+  scannedAt: string | null;
 }
 
 export interface RuntimeStatus {
@@ -59,6 +61,7 @@ export interface RuntimeStatus {
   lastScan: string | null;
   busyMessage: string | null;
   clipsDir: string;
+  workstationLabel: string | null;
   localClipCount: number;
   diskFreeBytes: number | null;
   diskLow: boolean;
@@ -71,6 +74,7 @@ export interface RuntimeStatus {
   lastTtsError: string | null;
   startupError: string | null;
   recordingMaxDurationSec: number | null;
+  hasIndonesianVoice: boolean;
 }
 
 export class AgentRuntime {
@@ -96,6 +100,7 @@ export class AgentRuntime {
   private spokenScanIds = new Set<string>();
   private lastDisconnectTtsAt = new Map<string, number>();
   private busyMessageTimer: NodeJS.Timeout | null = null;
+  private recordingStarts = new Map<string, string>();
   private status: RuntimeStatus = {
     paired: false,
     recording: false,
@@ -103,6 +108,7 @@ export class AgentRuntime {
     lastScan: null,
     busyMessage: null,
     clipsDir: "",
+    workstationLabel: null,
     localClipCount: 0,
     diskFreeBytes: null,
     diskLow: false,
@@ -115,6 +121,7 @@ export class AgentRuntime {
     lastTtsError: null,
     startupError: null,
     recordingMaxDurationSec: null,
+    hasIndonesianVoice: true,
   };
 
   constructor(config?: AgentConfig) {
@@ -129,6 +136,8 @@ export class AgentRuntime {
     this.status.localClipCount = listLocalClipFiles(
       this.config.clipsDir,
     ).length;
+    this.status.workstationLabel = this.config.workstationLabel ?? null;
+    this.status.hasIndonesianVoice = checkIndonesianVoiceWindows();
     this.refreshDiskStatus();
     this.updateScannerStatus();
     return { ...this.status };
@@ -345,6 +354,15 @@ export class AgentRuntime {
           state = "offline";
         }
 
+        let localScannedAt = this.recordingStarts.get(s.cctv.id) ?? null;
+        if (recording && !localScannedAt) {
+          localScannedAt = activeRow?.scannedAt ?? new Date().toISOString();
+          this.recordingStarts.set(s.cctv.id, localScannedAt);
+        } else if (!recording && localScannedAt) {
+          this.recordingStarts.delete(s.cctv.id);
+          localScannedAt = null;
+        }
+
         return {
           cctvId: s.cctv.id,
           cctvLabel: s.cctv.label,
@@ -359,6 +377,7 @@ export class AgentRuntime {
           previewSrc: this.go2rtcPreview.streamName(s.cctv.id),
           go2rtcBaseUrl: GO2RTC_API_BASE,
           previewError,
+          scannedAt: localScannedAt,
         } satisfies MonitorCellStatus;
       });
   }
@@ -381,7 +400,12 @@ export class AgentRuntime {
     startDate?: string;
     endDate?: string;
     status?: string;
-  }) {
+  }): Promise<{
+    items: AgentRecentScan[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     if (!this.config.deviceToken) return { items: [], total: 0, page: 1, limit: 10 };
     return this.api.listInvoiceScans(query);
   }
@@ -464,6 +488,7 @@ export class AgentRuntime {
   async stopRecording(scanId: string): Promise<void> {
     const row = this.lastActiveRecordings.find((r) => r.scanId === scanId);
     const cctvId = row?.cctvConfigId ?? "unknown";
+    this.recordingStarts.delete(cctvId);
 
     await this.withCctvLock(cctvId, async () => {
       if (this.finishingScans.has(scanId)) return;
@@ -647,6 +672,7 @@ export class AgentRuntime {
           clipsDir: this.config.clipsDir,
         }),
       );
+      this.recordingStarts.set(scanner.cctv.id, new Date().toISOString());
       this.status.recording = true;
       this.status.lastError = null;
     } catch (err) {
@@ -684,6 +710,7 @@ export class AgentRuntime {
     cctvConfigId?: string | null;
   }): Promise<void> {
     const cctvId = row.cctvConfigId ?? "unknown";
+    this.recordingStarts.delete(cctvId);
 
     await this.withCctvLock(cctvId, async () => {
       if (this.finishingScans.has(row.scanId)) return;
@@ -745,8 +772,8 @@ export class AgentRuntime {
             row.cctvUsername,
             row.cctvPassword,
           );
+          const cctvId = row.cctvConfigId || "unknown";
           try {
-            const cctvId = row.cctvConfigId || "unknown";
             const scanner = this.remoteConfig?.scanners.find(
               (s) => s.cctv?.id === cctvId,
             );
@@ -764,8 +791,10 @@ export class AgentRuntime {
                 clipsDir: this.config.clipsDir,
               }),
             );
+            this.recordingStarts.set(cctvId, row.scannedAt);
             this.status.recording = true;
           } catch {
+            this.recordingStarts.delete(cctvId);
             await this.api.failRecording(row.scanId);
           }
         }

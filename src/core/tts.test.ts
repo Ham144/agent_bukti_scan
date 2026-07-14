@@ -37,10 +37,10 @@ describe("buildRecordingStartMessage", () => {
   it("builds short rekamkemas-style announcement", () => {
     expect(
       buildRecordingStartMessage("budi.santoso", "123456789012345678901234567890"),
-    ).toBe("Merekam resi 45678901234567890");
+    ).toBe("budi santoso merekam resi 45678901234567890");
   });
 
   it("falls back when invoice empty", () => {
-    expect(buildRecordingStartMessage("budi", "  ")).toBe("Merekam resi");
+    expect(buildRecordingStartMessage("budi", "  ")).toBe("budi merekam resi");
   });
 });
