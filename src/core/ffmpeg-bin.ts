@@ -79,5 +79,14 @@ export function resolveFfmpegBin(): string | null {
 }
 
 export function ffmpegRtspInputArgs(transport: "tcp" | "udp" = "tcp"): string[] {
-  return ["-rtsp_transport", transport, "-timeout", "10000000"];
+  return [
+    "-rtsp_transport",
+    transport,
+    "-timeout",
+    "5000000",
+    "-probesize",
+    "32768",
+    "-analyzeduration",
+    "100000",
+  ];
 }

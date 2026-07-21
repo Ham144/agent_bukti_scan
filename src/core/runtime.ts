@@ -75,6 +75,7 @@ export interface RuntimeStatus {
   startupError: string | null;
   recordingMaxDurationSec: number | null;
   hasIndonesianVoice: boolean;
+  hideTtsLanguageWarning: boolean;
 }
 
 export class AgentRuntime {
@@ -93,7 +94,10 @@ export class AgentRuntime {
     ReturnType<AgentApiClient["fetchConfig"]>
   > | null = null;
   private ingestLocks = new Set<string>();
+  private globalIngestLock: Promise<void> = Promise.resolve();
   private reconcileLock = false;
+  private isPolling = false;
+  private startingScans = new Set<string>();
   private finishingScans = new Set<string>();
   private cctvGate = new Map<string, Promise<void>>();
   private lastActiveRecordings: AgentActiveRecording[] = [];
@@ -122,6 +126,7 @@ export class AgentRuntime {
     startupError: null,
     recordingMaxDurationSec: null,
     hasIndonesianVoice: true,
+    hideTtsLanguageWarning: false,
   };
 
   constructor(config?: AgentConfig) {
@@ -138,6 +143,7 @@ export class AgentRuntime {
     ).length;
     this.status.workstationLabel = this.config.workstationLabel ?? null;
     this.status.hasIndonesianVoice = checkIndonesianVoiceWindows();
+    this.status.hideTtsLanguageWarning = !!this.config.hideTtsLanguageWarning;
     this.refreshDiskStatus();
     this.updateScannerStatus();
     return { ...this.status };
@@ -170,6 +176,7 @@ export class AgentRuntime {
   updateTtsSettings(settings: {
     ttsEnabled?: boolean;
     ttsVolume?: number;
+    hideTtsLanguageWarning?: boolean;
   }): AgentConfig {
     if (settings.ttsEnabled !== undefined) {
       this.config.ttsEnabled = settings.ttsEnabled;
@@ -177,13 +184,16 @@ export class AgentRuntime {
     if (settings.ttsVolume !== undefined) {
       this.config.ttsVolume = Math.max(0, Math.min(100, settings.ttsVolume));
     }
+    if (settings.hideTtsLanguageWarning !== undefined) {
+      this.config.hideTtsLanguageWarning = settings.hideTtsLanguageWarning;
+    }
     saveConfig(this.config);
     return { ...this.config };
   }
 
   testTts(): void {
     this.speakMessage(
-      buildRecordingStartMessage("Budi", "12345678901234567"),
+      buildRecordingStartMessage("Budi","Scanner 1"),
     );
   }
 
@@ -211,7 +221,7 @@ export class AgentRuntime {
   private announceRecordingStart(
     scanId: string,
     operatorUsername: string | null | undefined,
-    invoiceNumber: string,
+    scannerLabel: string | null | undefined,
   ): void {
     if (this.spokenScanIds.has(scanId)) return;
     this.spokenScanIds.add(scanId);
@@ -220,7 +230,7 @@ export class AgentRuntime {
       if (first) this.spokenScanIds.delete(first);
     }
     this.speakMessage(
-      buildRecordingStartMessage(operatorUsername, invoiceNumber),
+      buildRecordingStartMessage(operatorUsername, scannerLabel),
     );
   }
 
@@ -247,7 +257,7 @@ export class AgentRuntime {
     }
     this.status.busyMessage = null;
   }
-
+  
   getScanners(): AgentScannerConfig[] {
     return this.remoteConfig?.scanners ?? [];
   }
@@ -304,18 +314,42 @@ export class AgentRuntime {
 
     if (!next.scanners.length) {
       await this.serial.disconnectAll();
-    } else if (reconnect) {
-      await this.serial.reconnectAll(
-        next.scanners,
-        (id, inv) => this.handleScan(id, inv),
-        (scannerId) => {
-          this.speakDisconnectWarning(
-            `scanner:${scannerId}`,
-            buildScannerDisconnectMessage(),
-          );
-          this.updateScannerStatus();
-        },
-      );
+    } else {
+      if (reconnect) {
+        await this.serial.reconnectAll(
+          next.scanners,
+          (id, inv) => this.handleScan(id, inv),
+          (scannerId) => {
+            this.speakDisconnectWarning(
+              `scanner:${scannerId}`,
+              buildScannerDisconnectMessage(),
+            );
+            this.updateScannerStatus();
+          },
+        );
+      } else {
+        // Auto-reconnect any disconnected scanners
+        const connectedIds = new Set(this.serial.getConnectedScannerIds());
+        for (const scanner of next.scanners) {
+          if (!connectedIds.has(scanner.id)) {
+            try {
+              await this.serial.connectScanner(
+                scanner,
+                (id, inv) => this.handleScan(id, inv),
+                (scannerId) => {
+                  this.speakDisconnectWarning(
+                    `scanner:${scannerId}`,
+                    buildScannerDisconnectMessage(),
+                  );
+                  this.updateScannerStatus();
+                },
+              );
+            } catch {
+              // Ignore failure if scanner is still offline/unplugged
+            }
+          }
+        }
+      }
     }
 
     this.status.configSyncedAt = new Date().toISOString();
@@ -336,16 +370,21 @@ export class AgentRuntime {
       .filter((s) => s.cctv?.isActive && s.cctv.rtspUrl)
       .map((s) => {
         const link = linkByScanner.get(s.id);
-        const recording = this.recorder.isRecordingForCctv(s.cctv.id);
-        const invoice = recording
-          ? this.recorder.getRecordingInvoiceForCctv(s.cctv.id)
-          : null;
-        const scanId = recording
-          ? this.recorder.getRecordingScanIdForCctv(s.cctv.id)
-          : null;
         const activeRow = this.lastActiveRecordings.find(
           (r) => r.cctvConfigId === s.cctv.id,
         );
+
+        const isStarting = [...this.startingScans.values()].some((scanId) => {
+          return activeRow?.scanId === scanId;
+        });
+
+        const recording = this.recorder.isRecordingForCctv(s.cctv.id) || isStarting;
+        const invoice = recording
+          ? (this.recorder.getRecordingInvoiceForCctv(s.cctv.id) ?? activeRow?.invoiceNumber ?? null)
+          : null;
+        const scanId = recording
+          ? (this.recorder.getRecordingScanIdForCctv(s.cctv.id) ?? activeRow?.scanId ?? null)
+          : null;
         const remainingSec = activeRow?.remainingSec ?? null;
         const previewError = this.go2rtcPreview.getLastError(s.cctv.id);
         const scannerConnected = link?.connected ?? false;
@@ -544,7 +583,7 @@ export class AgentRuntime {
       error: this.serial.getScannerError(s.id),
     }));
   }
-
+  
   private async withCctvLock<T>(
     cctvId: string,
     work: () => Promise<T>,
@@ -629,18 +668,52 @@ export class AgentRuntime {
     if (!this.remoteConfig) return;
 
     if (this.ingestLocks.has(scannerConfigId)) {
-      this.setTransientBusyMessage(
-        `Scanner sibuk — scan "${invoiceNumber}" diabaikan, tunggu selesai`,
+      const scanner = this.remoteConfig.scanners.find(
+        (s) => s.id === scannerConfigId,
       );
+      const operatorName = scanner?.assignedUsername || scanner?.label || "Operator";
+      
+      this.setTransientBusyMessage(
+        `Scanner ${operatorName} sibuk — mohon tunggu proses sebelumnya selesai`,
+      );
+      this.speakMessage(`Scanner ${operatorName} sibuk`);
       return;
     }
 
     this.ingestLocks.add(scannerConfigId);
     this.clearBusyMessage();
+
+    // Antre request ingest jika ada scanner lain yang sedang scan di waktu yang persis sama
+    const tail = this.globalIngestLock;
+    let releaseLock!: () => void;
+    this.globalIngestLock = new Promise<void>((r) => { releaseLock = r; });
+    await tail;
+
     let scanId: string | null = null;
+    let ingestSuccess = false;
+    let scanResult: any = null;
+
     try {
-      const scan = await this.api.ingest(scannerConfigId, invoiceNumber);
-      scanId = scan.id;
+      scanResult = await this.api.ingest(scannerConfigId, invoiceNumber);
+      ingestSuccess = true;
+    } catch (err) {
+      this.status.lastError = err instanceof Error ? err.message : "Scan gagal";
+    } finally {
+      releaseLock(); // <-- lepaskan lock secepat mungkin agar scanner lain bisa ingest
+    }
+
+    if (!ingestSuccess) {
+      this.ingestLocks.delete(scannerConfigId);
+      if (!this.status.recording && this.ingestLocks.size === 0) {
+        this.clearBusyMessage();
+      }
+      return;
+    }
+
+    try {
+      const scan = scanResult;
+      scanId = scan.id as string;
+      this.startingScans.add(scanId);
       this.status.lastScan = scan.invoiceNumber;
 
       const scanner = this.remoteConfig.scanners.find(
@@ -653,7 +726,7 @@ export class AgentRuntime {
       this.announceRecordingStart(
         scan.id,
         scanner.assignedUsername,
-        scan.invoiceNumber,
+        scanner.label,
       );
 
       const rtspUrl = this.buildRtspUrl(
@@ -670,6 +743,7 @@ export class AgentRuntime {
           invoiceNumber: scan.invoiceNumber,
           rtspUrl,
           clipsDir: this.config.clipsDir,
+          operatorName: scanner.assignedUsername,
         }),
       );
       this.recordingStarts.set(scanner.cctv.id, new Date().toISOString());
@@ -695,6 +769,9 @@ export class AgentRuntime {
         );
       }
     } finally {
+      if (scanId) {
+        this.startingScans.delete(scanId);
+      }
       this.ingestLocks.delete(scannerConfigId);
       if (!this.status.recording && this.ingestLocks.size === 0) {
         this.clearBusyMessage();
@@ -756,7 +833,8 @@ export class AgentRuntime {
   }
 
   private async pollRecordings(): Promise<void> {
-    if (!this.config.deviceToken) return;
+    if (this.isPolling || !this.config.deviceToken) return;
+    this.isPolling = true;
 
     try {
       const rows = await this.api.activeRecordings();
@@ -764,7 +842,7 @@ export class AgentRuntime {
 
       for (const row of rows) {
         const shouldStop = row.stopRequested || row.remainingSec <= 0;
-        const isLocal = this.recorder.isRecording(row.scanId);
+        const isLocal = this.recorder.isRecording(row.scanId) || this.startingScans.has(row.scanId);
 
         if (!isLocal && !shouldStop && row.rtspUrl) {
           const rtspUrl = this.buildRtspUrl(
@@ -773,6 +851,8 @@ export class AgentRuntime {
             row.cctvPassword,
           );
           const cctvId = row.cctvConfigId || "unknown";
+          
+          this.startingScans.add(row.scanId);
           try {
             const scanner = this.remoteConfig?.scanners.find(
               (s) => s.cctv?.id === cctvId,
@@ -780,7 +860,7 @@ export class AgentRuntime {
             this.announceRecordingStart(
               row.scanId,
               scanner?.assignedUsername ?? null,
-              row.invoiceNumber,
+              scanner?.label ?? null,
             );
             await this.withCctvLock(cctvId, () =>
               this.recorder.start({
@@ -789,6 +869,7 @@ export class AgentRuntime {
                 invoiceNumber: row.invoiceNumber,
                 rtspUrl,
                 clipsDir: this.config.clipsDir,
+                operatorName: scanner?.assignedUsername,
               }),
             );
             this.recordingStarts.set(cctvId, row.scannedAt);
@@ -796,6 +877,8 @@ export class AgentRuntime {
           } catch {
             this.recordingStarts.delete(cctvId);
             await this.api.failRecording(row.scanId);
+          } finally {
+            this.startingScans.delete(row.scanId);
           }
         }
 
@@ -810,6 +893,8 @@ export class AgentRuntime {
       }
     } catch (err) {
       this.status.lastError = err instanceof Error ? err.message : "Poll gagal";
+    } finally {
+      this.isPolling = false;
     }
   }
 

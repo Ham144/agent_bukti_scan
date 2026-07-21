@@ -13,8 +13,6 @@ const RECORD_MIN_BYTES = 65_536;
 const SEGMENT_MAX_RETRIES = 8;
 const SEGMENT_RETRY_DELAY_MS = 600;
 const STOP_WAIT_MS = 4_000;
-/** Cooldown after stopping previous stream on same CCTV. */
-const POST_CCTV_STOP_MS = 1_500;
 
 interface RecordingSession {
   key: string;
@@ -49,6 +47,30 @@ export function isFirstSegmentReady(
 
 export class LocalRecorder {
   private sessions = new Map<string, RecordingSession>();
+
+  constructor() {
+    const cleanup = () => {
+      for (const session of this.sessions.values()) {
+        if (session.proc && session.proc.exitCode === null) {
+          try {
+            session.proc.kill("SIGKILL");
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    };
+
+    process.on("exit", cleanup);
+    process.on("SIGINT", () => {
+      cleanup();
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      cleanup();
+      process.exit(0);
+    });
+  }
 
   private sessionKey(cctvConfigId: string, invoiceNumber: string): string {
     return `${cctvConfigId}:${invoiceNumber}`;
@@ -332,18 +354,20 @@ export class LocalRecorder {
     invoiceNumber: string;
     rtspUrl: string;
     clipsDir: string;
+    operatorName?: string | null;
   }): Promise<string> {
     const ffmpegBin = resolveFfmpegBin();
     if (!ffmpegBin) throw new Error("FFmpeg tidak tersedia");
 
+    // Hentikan sesi lama pada CCTV yang sama terlebih dahulu secara sinkron
     await this.stopForCctv(params.cctvConfigId);
-    await new Promise((r) => setTimeout(r, POST_CCTV_STOP_MS));
 
     const monthlyDir = buildMonthlyClipDir(params.clipsDir);
     fs.mkdirSync(monthlyDir, { recursive: true });
     const outputPath = buildLocalClipPath(
       params.clipsDir,
       params.invoiceNumber,
+      params.operatorName,
     );
     const partsDir = this.getPartsDir(params.clipsDir, params.invoiceNumber);
     this.cleanupParts(partsDir);

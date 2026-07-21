@@ -7,18 +7,18 @@ import {
 
 describe("sanitizeOperatorName", () => {
   it("returns Operator for empty input", () => {
-    expect(sanitizeOperatorName(null)).toBe("Operator");
-    expect(sanitizeOperatorName("")).toBe("Operator");
-    expect(sanitizeOperatorName("...")).toBe("Operator");
+    expect(sanitizeOperatorName(null, "Scanner 1")).toBe("Scanner 1");
+    expect(sanitizeOperatorName("", "Scanner 1")).toBe("Scanner 1");
+    expect(sanitizeOperatorName("...", "Scanner 1")).toBe("Scanner 1");
   });
 
   it("replaces dots dashes and symbols with spaces", () => {
-    expect(sanitizeOperatorName("budi.santoso-01")).toBe("budi santoso 01");
-    expect(sanitizeOperatorName("user@store#1")).toBe("user store 1");
+    expect(sanitizeOperatorName("budi.santoso-01", "Scanner 1")).toBe("budi santoso 01");
+    expect(sanitizeOperatorName("user@store#1", "Scanner 1")).toBe("user store 1");
   });
 
   it("keeps plain names", () => {
-    expect(sanitizeOperatorName("Budi")).toBe("Budi");
+    expect(sanitizeOperatorName("Budi", "Scanner 1")).toBe("Budi");
   });
 });
 
@@ -37,10 +37,10 @@ describe("buildRecordingStartMessage", () => {
   it("builds short rekamkemas-style announcement", () => {
     expect(
       buildRecordingStartMessage("budi.santoso", "123456789012345678901234567890"),
-    ).toBe("budi santoso merekam resi 45678901234567890");
+    ).toBe("budi santoso merekam");
   });
 
   it("falls back when invoice empty", () => {
-    expect(buildRecordingStartMessage("budi", "  ")).toBe("budi merekam resi");
+    expect(buildRecordingStartMessage("budi", "  ")).toBe("budi merekam");
   });
 });

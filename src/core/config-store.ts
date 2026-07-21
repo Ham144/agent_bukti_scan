@@ -19,6 +19,7 @@ export interface AgentConfig {
   ttsEnabled?: boolean;
   ttsVolume?: number;
   clipRetentionDays?: number;
+  hideTtsLanguageWarning?: boolean;
 }
 
 const CONFIG_DIR = path.join(
@@ -60,6 +61,7 @@ export function loadConfig(): AgentConfig {
           typeof raw.clipRetentionDays === "number"
             ? Math.max(0, Math.min(365, Math.round(raw.clipRetentionDays)))
             : 14,
+        hideTtsLanguageWarning: !!raw.hideTtsLanguageWarning,
       };
     }
   } catch {
@@ -71,6 +73,7 @@ export function loadConfig(): AgentConfig {
     ttsEnabled: true,
     ttsVolume: 80,
     clipRetentionDays: 14,
+    hideTtsLanguageWarning: false,
   };
 }
 

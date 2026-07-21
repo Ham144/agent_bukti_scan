@@ -28,6 +28,7 @@ export interface AgentConfig {
   clipsDir: string;
   ttsEnabled?: boolean;
   ttsVolume?: number;
+  hideTtsLanguageWarning?: boolean;
 }
 
 const TABS: { id: Tab; label: string }[] = [

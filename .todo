@@ -1,0 +1,11 @@
+Agent Progress & Features Checklist:
+[x] Multi Scan 1:1:1 - Konkurensi penuh antar scanner tanpa saling memblokir / intervensi
+[x] TTS Bahasa Indonesia - Suara pemandu pelafalan Indonesia yang natural
+[x] Double TTS Concurrency - Suara tidak saling mengabaikan ketika scan di waktu yang bersamaan
+[x] Peringatan Suara "Scanner Operator Sibuk" - Menggunakan nama operator bersangkutan
+[x] Auto Cut & Clean Exit - Membunuh semua proses rekaman latar (FFmpeg) saat aplikasi ditutup/restart
+[x] Auto Cut pada Maximum Duration - Memotong otomatis rekaman jika melampaui batas menit maksimum
+[x] Penamaan File Detail & Terstandar - Menggunakan format `{invoice}--{operator}--{jam}.mp4`
+[x] Penanganan Resi Duplikat - Penomoran otomatis `(2)`, `(3)`, dst. untuk menjaga riwayat (tidak menimpa file)
+[x] Kestabilan UI Live Preview Sub-stream - Menghilangkan bug indikator perekaman berkedip di Tab Monitor
+[x] Startup Rekaman Instan - Penghapusan cooldown dan optimasi parameter RTSP FFmpeg untuk start perekaman seketika

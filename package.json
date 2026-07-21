@@ -9,7 +9,8 @@
       "@serialport/bindings-cpp",
       "electron",
       "esbuild",
-      "ffmpeg-static"
+      "ffmpeg-static",
+      "go2rtc-static"
     ]
   },
   "main": "dist/electron/main.js",

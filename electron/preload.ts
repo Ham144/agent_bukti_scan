@@ -48,6 +48,7 @@ export interface RuntimeStatusView {
   startupError?: string | null;
   recordingMaxDurationSec?: number | null;
   hasIndonesianVoice?: boolean;
+  hideTtsLanguageWarning?: boolean;
 }
 
 export interface MonitorCellView {
@@ -130,7 +131,7 @@ contextBridge.exposeInMainWorld("BuktiScanAgent", {
     ipcRenderer.invoke("agent:start-camera-preview", cctvId) as Promise<void>,
   stopCameraPreview: (cctvId: string) =>
     ipcRenderer.invoke("agent:stop-camera-preview", cctvId) as Promise<void>,
-  updateTtsSettings: (payload: { ttsEnabled?: boolean; ttsVolume?: number }) =>
+  updateTtsSettings: (payload: { ttsEnabled?: boolean; ttsVolume?: number; hideTtsLanguageWarning?: boolean }) =>
     ipcRenderer.invoke("agent:update-tts-settings", payload) as Promise<
       Record<string, unknown>
     >,
@@ -201,6 +202,7 @@ export interface BuktiScanAgentBridge {
   updateTtsSettings: (payload: {
     ttsEnabled?: boolean;
     ttsVolume?: number;
+    hideTtsLanguageWarning?: boolean;
   }) => Promise<Record<string, unknown>>;
   testTts: () => Promise<void>;
   setMonitorMode: (enabled: boolean) => Promise<void>;

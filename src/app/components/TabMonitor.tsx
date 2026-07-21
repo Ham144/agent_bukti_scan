@@ -33,7 +33,6 @@ export function TabMonitor({ config }: { config: AgentConfig | null }) {
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [snapshotCell, setSnapshotCell] = useState<{ label: string; src: string } | null>(null);
-  const [hasIndonesianVoice, setHasIndonesianVoice] = useState<boolean>(true);
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -43,12 +42,6 @@ export function TabMonitor({ config }: { config: AgentConfig | null }) {
       setLoading(true);
       setBootError(null);
       try {
-        const status = await window.BuktiScanAgent.getStatus();
-        if (activeRef.current && status) {
-          if (status.hasIndonesianVoice !== undefined) {
-            setHasIndonesianVoice(status.hasIndonesianVoice);
-          }
-        }
         await window.BuktiScanAgent.setMonitorMode(true);
         const rows = await window.BuktiScanAgent.startMonitor();
         if (activeRef.current) setCells(rows);
@@ -175,51 +168,10 @@ export function TabMonitor({ config }: { config: AgentConfig | null }) {
           marginBottom: 12,
           lineHeight: 1.4,
         }}
-      >
+      >     
         ℹ️ <strong>Tips Monitor:</strong> Tab ini otomatis memperbesar ukuran jendela untuk memuat grid seluruh kamera. Jika Anda hanya ingin memantau satu CCTV dengan ukuran jendela normal, silakan gunakan tab <strong>Kamera</strong>.
       </div>
-      {!hasIndonesianVoice && (
-        <div
-          style={{
-            padding: "10px 14px",
-            background: "#fffbeb",
-            border: "1px solid #fde68a",
-            borderRadius: 6,
-            color: "#b45309",
-            fontSize: 12,
-            marginBottom: 12,
-            lineHeight: 1.5,
-          }}
-        >
-          ⚠️ <strong>Paket Suara Bahasa Indonesia tidak terdeteksi:</strong> Suara TTS saat scan akan terdengar dalam bahasa Inggris dengan logat asing.
-          <div style={{ marginTop: 4 }}>
-            <strong>Cara Install Bahasa Indonesia di Windows:</strong>
-            <ol style={{ margin: "2px 0 0", paddingLeft: 18 }}>
-              <li>Buka <strong>Settings</strong> (Pengaturan) di Windows Anda.</li>
-              <li>Pilih <strong>Time & Language</strong> -&gt; <strong>Language & Region</strong>.</li>
-              <li>Klik <strong>Add a language</strong>, cari dan pilih <strong>Bahasa Indonesia</strong>.</li>
-              <li><strong>Penting:</strong> Pastikan Anda mencentang opsi <strong>Speech / Text-to-speech</strong> sebelum mengklik tombol <strong>Install</strong>.</li>
-              <li>Setelah selesai diunduh oleh Windows, restart aplikasi BuktiScan Agent ini.</li>
-            </ol>
-            <div style={{ marginTop: 8 }}>
-              <button
-                type="button"
-                style={{
-                  ...S.btnSmall,
-                  background: "#b45309",
-                  color: "#fff",
-                  border: "none",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-                onClick={() => void window.BuktiScanAgent.openSpeechSettings()}
-              >
-                ⚙️ Buka Pengaturan Bahasa Windows
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
       {stopError ? <p style={S.error}>{stopError}</p> : null}
       {snapshotError ? <p style={S.error}>{snapshotError}</p> : null}
       {refreshError ? <p style={S.error}>{refreshError}</p> : null}

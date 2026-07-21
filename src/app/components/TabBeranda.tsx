@@ -62,7 +62,7 @@ function TtsRemoteHintCard({
       </p>
       <p style={{ ...S.hint, marginTop: 6 }}>
         Status: {enabled ? `aktif (volume ${volume})` : "nonaktif"} — sinkron
-        otomatis ~30 detik. Ucapan: &quot;Merekam resi …&quot;
+        otomatis ~30 detik. Ucapan: &quot;Merekam …&quot;
       </p>
       <button
         type="button"

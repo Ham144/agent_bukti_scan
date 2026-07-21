@@ -305,7 +305,7 @@ ipcMain.handle("agent:stop-camera-preview", async (_evt, cctvId: string) => {
 
 ipcMain.handle(
   "agent:update-tts-settings",
-  (_evt, payload: { ttsEnabled?: boolean; ttsVolume?: number }) => {
+  (_evt, payload: { ttsEnabled?: boolean; ttsVolume?: number; hideTtsLanguageWarning?: boolean }) => {
     if (!runtime) throw new Error("Agent belum siap");
     return runtime.updateTtsSettings(payload);
   },

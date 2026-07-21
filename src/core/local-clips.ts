@@ -19,8 +19,12 @@ function isValidClipFile(filePath: string): LocalClipFile | null {
   try {
     const stat = fs.statSync(filePath);
     if (!stat.isFile() || stat.size < MIN_CLIP_BYTES) return null;
+    
+    const base = name.replace(/\.mp4$/i, "");
+    const invoiceNumber = base.split("--")[0];
+
     return {
-      invoiceNumber: name.replace(/\.mp4$/i, ""),
+      invoiceNumber,
       localClipPath: filePath,
       sizeBytes: stat.size,
     };
@@ -76,17 +80,38 @@ export function resolveClipPath(
   clipsDir: string,
   invoiceNumber: string,
 ): string | null {
-  const fileName = `${safeInvoiceFileName(invoiceNumber)}.mp4`;
+  const invoiceSafe = safeInvoiceFileName(invoiceNumber);
 
   for (const monthDir of listMonthlyClipDirs(clipsDir)) {
-    const monthlyPath = path.join(monthDir, fileName);
-    const clip = isValidClipFile(monthlyPath);
-    if (clip) return clip.localClipPath;
+    if (!fs.existsSync(monthDir)) continue;
+    const files = fs.readdirSync(monthDir);
+    for (const name of files) {
+      if (!name.toLowerCase().endsWith(".mp4")) continue;
+      const base = name.replace(/\.mp4$/i, "");
+      const firstPart = base.split("--")[0];
+      if (firstPart === invoiceSafe) {
+        const fullPath = path.join(monthDir, name);
+        const clip = isValidClipFile(fullPath);
+        if (clip) return clip.localClipPath;
+      }
+    }
   }
 
-  const legacyPath = path.join(clipsDir, fileName);
-  const legacyClip = isValidClipFile(legacyPath);
-  return legacyClip?.localClipPath ?? null;
+  if (fs.existsSync(clipsDir)) {
+    const files = fs.readdirSync(clipsDir);
+    for (const name of files) {
+      if (!name.toLowerCase().endsWith(".mp4")) continue;
+      const base = name.replace(/\.mp4$/i, "");
+      const firstPart = base.split("--")[0];
+      if (firstPart === invoiceSafe) {
+        const fullPath = path.join(clipsDir, name);
+        const clip = isValidClipFile(fullPath);
+        if (clip) return clip.localClipPath;
+      }
+    }
+  }
+
+  return null;
 }
 
 export function findClipFilePath(
