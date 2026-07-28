@@ -7,6 +7,7 @@ import {
   Menu,
   nativeImage,
 } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "path";
 import fs from "fs";
 import { isAxiosError } from "axios";
@@ -20,6 +21,63 @@ loadAgentEnv();
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let runtime: AgentRuntime | null = null;
+
+/**
+ * Configure silent auto-update.
+ * - Downloads new version in the background automatically.
+ * - Installs on next app quit (no user confirmation needed).
+ * - Update server URL is read from BuktiScan_UPDATE_URL env var,
+ *   falling back to {BuktiScan_API_URL}/downloads.
+ */
+function setupAutoUpdater(): void {
+  if (!app.isPackaged) return; // disabled in dev mode
+
+  const apiUrl = (process.env.BuktiScan_API_URL ?? "").replace(/\/$/, "");
+  const updateUrl =
+    (process.env.BuktiScan_UPDATE_URL ?? "").replace(/\/$/, "") ||
+    `${apiUrl}/downloads`;
+
+  if (!updateUrl || updateUrl === "/downloads") return;
+
+  autoUpdater.logger = null; // suppress verbose logs
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.setFeedURL({
+    provider: "generic",
+    url: updateUrl,
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    if (tray) {
+      tray.setToolTip(
+        `BuktiScan Agent — Mengunduh update ${info.version}...`,
+      );
+    }
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    if (tray) {
+      tray.setToolTip(
+        `BuktiScan Agent — Update ${info.version} siap, akan diinstall saat keluar`,
+      );
+    }
+  });
+
+  autoUpdater.on("error", () => {
+    // Silently ignore — don't block the app for update errors
+  });
+
+  // Check for updates 10 seconds after startup
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 10_000);
+
+  // Re-check every 4 hours
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 4 * 60 * 60 * 1000);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -121,6 +179,7 @@ app.whenReady().then(async () => {
   createWindow();
   await startRuntimeIfPaired();
   setInterval(refreshTray, 3000);
+  setupAutoUpdater();
 });
 
 app.on("window-all-closed", () => {

@@ -6,7 +6,7 @@ import { captureCctvSnapshot } from "./cctv-snapshot";
 import { shouldReconnectSerial } from "./config-sync";
 import { LocalMediaServer } from "./local-media-server";
 import { Go2RtcPreviewManager, GO2RTC_API_BASE } from "./go2rtc-preview";
-import { toPreviewSubstreamUrl } from "./rtsp-url";
+import { toPreviewSubstreamUrl, maskRtspUrl } from "./rtsp-url";
 import { AgentConfig, loadConfig, saveConfig } from "./config-store";
 import { MONTHLY_CLIPS_DIR_PATTERN, monthlyClipsSubdir } from "./clip-storage";
 import { listLocalClipFiles, resolveClipPath } from "./local-clips";
@@ -23,10 +23,9 @@ import {
   buildScannerDisconnectMessage,
   speak,
   TtsOptions,
-  checkIndonesianVoiceWindows,
 } from "./tts";
 
-export const AGENT_VERSION = "0.1.3";
+export const AGENT_VERSION = "1.0.0";
 
 export interface ScannerLinkStatus {
   id: string;
@@ -52,6 +51,8 @@ export interface MonitorCellStatus {
   go2rtcBaseUrl: string;
   previewError: string | null;
   scannedAt: string | null;
+  cctvIp: string | null;
+  cctvRtspUrl: string | null;
 }
 
 export interface RuntimeStatus {
@@ -142,8 +143,6 @@ export class AgentRuntime {
       this.config.clipsDir,
     ).length;
     this.status.workstationLabel = this.config.workstationLabel ?? null;
-    this.status.hasIndonesianVoice = checkIndonesianVoiceWindows();
-    this.status.hideTtsLanguageWarning = !!this.config.hideTtsLanguageWarning;
     this.refreshDiskStatus();
     this.updateScannerStatus();
     return { ...this.status };
@@ -193,7 +192,7 @@ export class AgentRuntime {
 
   testTts(): void {
     this.speakMessage(
-      buildRecordingStartMessage("Budi","Scanner 1"),
+      buildRecordingStartMessage(null, "Scanner 1"),
     );
   }
 
@@ -402,6 +401,8 @@ export class AgentRuntime {
           localScannedAt = null;
         }
 
+        const rtspInfo = maskRtspUrl(s.cctv.rtspUrl);
+
         return {
           cctvId: s.cctv.id,
           cctvLabel: s.cctv.label,
@@ -417,6 +418,8 @@ export class AgentRuntime {
           go2rtcBaseUrl: GO2RTC_API_BASE,
           previewError,
           scannedAt: localScannedAt,
+          cctvIp: rtspInfo.ip,
+          cctvRtspUrl: rtspInfo.masked,
         } satisfies MonitorCellStatus;
       });
   }
@@ -674,9 +677,9 @@ export class AgentRuntime {
       const operatorName = scanner?.assignedUsername || scanner?.label || "Operator";
       
       this.setTransientBusyMessage(
-        `Scanner ${operatorName} sibuk — mohon tunggu proses sebelumnya selesai`,
+        `Scanner ${operatorName} busy — please wait for the previous process to finish`,
       );
-      this.speakMessage(`Scanner ${operatorName} sibuk`);
+      this.speakMessage(`Scanner ${operatorName} busy`);
       return;
     }
 

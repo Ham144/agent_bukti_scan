@@ -1,7 +1,8 @@
 {
   "name": "BuktiScan-agent",
-  "version": "0.1.3",
+  "version": "1.0.0",
   "private": true,
+  "author": "ham-csi",
   "description": "BuktiScan desktop agent — scan, record RTSP, save clips locally",
   "packageManager": "pnpm@10.19.0",
   "pnpm": {
@@ -24,13 +25,14 @@
     "ensure:ffmpeg:win": "node scripts/ensure-ffmpeg-win.mjs",
     "ensure:go2rtc:win": "node scripts/ensure-go2rtc-win.mjs",
     "dist:win": "pnpm ensure:ffmpeg:win && pnpm ensure:go2rtc:win && pnpm build && electron-builder --win",
-    "dist:win:web": "pnpm dist:win && cp release/BuktiScanAgent-portable.zip ../frontend/public/downloads/",
+    "dist:win:web": "pnpm dist:win && node scripts/publish-release.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "pnpm test && pnpm build"
   },
   "dependencies": {
     "axios": "^1.7.9",
+    "electron-updater": "^6.8.9",
     "ffmpeg-static": "^5.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -89,14 +91,20 @@
     ],
     "win": {
       "target": [
+        "nsis",
         "zip"
       ],
-      "signAndEditExecutable": false,
-      "artifactName": "BuktiScanAgent-portable.${ext}"
+      "signAndEditExecutable": false
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "BuktiScanAgent-Setup.${ext}"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "http://placeholder/downloads/"
     }
   }
 }

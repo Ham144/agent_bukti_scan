@@ -1,46 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRecordingStartMessage,
-  invoiceTailDigits,
-  sanitizeOperatorName,
+  sanitizeScannerLabel,
 } from "./tts";
 
-describe("sanitizeOperatorName", () => {
-  it("returns Operator for empty input", () => {
-    expect(sanitizeOperatorName(null, "Scanner 1")).toBe("Scanner 1");
-    expect(sanitizeOperatorName("", "Scanner 1")).toBe("Scanner 1");
-    expect(sanitizeOperatorName("...", "Scanner 1")).toBe("Scanner 1");
+describe("sanitizeScannerLabel", () => {
+  it("returns Scanner for empty/null input", () => {
+    expect(sanitizeScannerLabel(null)).toBe("Scanner");
+    expect(sanitizeScannerLabel("")).toBe("Scanner");
+    expect(sanitizeScannerLabel("...")).toBe("Scanner");
   });
 
-  it("replaces dots dashes and symbols with spaces", () => {
-    expect(sanitizeOperatorName("budi.santoso-01", "Scanner 1")).toBe("budi santoso 01");
-    expect(sanitizeOperatorName("user@store#1", "Scanner 1")).toBe("user store 1");
+  it("replaces dots, dashes and symbols with spaces", () => {
+    expect(sanitizeScannerLabel("scanner.1")).toBe("scanner 1");
+    expect(sanitizeScannerLabel("pos-kasir#1")).toBe("pos kasir 1");
   });
 
-  it("keeps plain names", () => {
-    expect(sanitizeOperatorName("Budi", "Scanner 1")).toBe("Budi");
-  });
-});
-
-describe("invoiceTailDigits", () => {
-  it("returns last 17 characters when longer", () => {
-    const inv = "123456789012345678901234567890";
-    expect(invoiceTailDigits(inv)).toBe("45678901234567890");
-  });
-
-  it("returns full string when shorter", () => {
-    expect(invoiceTailDigits("INV123")).toBe("INV123");
+  it("keeps plain labels", () => {
+    expect(sanitizeScannerLabel("Scanner 1")).toBe("Scanner 1");
   });
 });
 
 describe("buildRecordingStartMessage", () => {
-  it("builds short rekamkemas-style announcement", () => {
+  it("produces '<label> start recording' format", () => {
     expect(
-      buildRecordingStartMessage("budi.santoso", "123456789012345678901234567890"),
-    ).toBe("budi santoso merekam");
+      buildRecordingStartMessage(null, "Scanner 1"),
+    ).toBe("Scanner 1 start recording");
   });
 
-  it("falls back when invoice empty", () => {
-    expect(buildRecordingStartMessage("budi", "  ")).toBe("budi merekam");
+  it("ignores operator username, uses scanner label only", () => {
+    expect(
+      buildRecordingStartMessage("budi.santoso", "POS Kasir"),
+    ).toBe("POS Kasir start recording");
+  });
+
+  it("falls back to Scanner when label is empty", () => {
+    expect(buildRecordingStartMessage(null, "  ")).toBe("Scanner start recording");
   });
 });

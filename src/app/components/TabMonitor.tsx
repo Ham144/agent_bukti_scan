@@ -169,7 +169,7 @@ export function TabMonitor({ config }: { config: AgentConfig | null }) {
           lineHeight: 1.4,
         }}
       >     
-        ℹ️ <strong>Tips Monitor:</strong> Tab ini otomatis memperbesar ukuran jendela untuk memuat grid seluruh kamera. Jika Anda hanya ingin memantau satu CCTV dengan ukuran jendela normal, silakan gunakan tab <strong>Kamera</strong>.
+        ℹ️ <strong>Tips Monitor:</strong> Untuk Preview dan rekam stabil dan tidak patah patah, ganti video encoding menjadi h.264 di di <strong>Configuration - video and audio - video encoding</strong> 
       </div>
 
       {stopError ? <p style={S.error}>{stopError}</p> : null}
@@ -304,6 +304,41 @@ export function TabMonitor({ config }: { config: AgentConfig | null }) {
                     {cell.cctvLabel}
                     {cell.operatorUsername ? ` · ${cell.operatorUsername}` : ""}
                   </div>
+                  {(cell.cctvIp || cell.cctvRtspUrl) && (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: 10,
+                        color: "#64748b",
+                        fontFamily: "monospace",
+                        background: "#f8fafc",
+                        padding: "4px 6px",
+                        borderRadius: 4,
+                        border: "1px solid #e2e8f0",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                      }}
+                    >
+                      {cell.cctvIp && (
+                        <div>
+                          <strong style={{ color: "#475569" }}>IP:</strong> {cell.cctvIp}
+                        </div>
+                      )}
+                      {cell.cctvRtspUrl && (
+                        <div
+                          style={{
+                            wordBreak: "break-all",
+                            whiteSpace: "pre-wrap",
+                            lineHeight: 1.2,
+                          }}
+                          title={cell.cctvRtspUrl}
+                        >
+                          <strong style={{ color: "#475569" }}>RTSP:</strong> {cell.cctvRtspUrl}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                   <button

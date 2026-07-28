@@ -66,6 +66,8 @@ export interface MonitorCellView {
   go2rtcBaseUrl: string;
   previewError: string | null;
   scannedAt?: string | null;
+  cctvIp?: string | null;
+  cctvRtspUrl?: string | null;
 }
 
 export interface ActiveRecordingView {

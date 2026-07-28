@@ -32,8 +32,8 @@ export interface AgentConfig {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "beranda", label: "Beranda" },
   { id: "monitor", label: "Monitor" },
+  { id: "beranda", label: "Beranda" },
   { id: "kamera", label: "Kamera" },
   { id: "scanner", label: "Scanner" },
   { id: "penyimpanan", label: "Penyimpanan" },
@@ -42,7 +42,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("beranda");
+  const [tab, setTab] = useState<Tab>("monitor");
   const [status, setStatus] = useState<RuntimeStatusView | null>(null);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [scanners, setScanners] = useState<AgentScannerView[]>([]);
@@ -146,6 +146,8 @@ export default function App() {
   };
 
   const onUnpair = async () => {
+    const ok = window.confirm("Apakah Anda yakin ingin keluar session (unpair) workstation ini?");
+    if (!ok) return;
     try {
       await window.BuktiScanAgent.unpair();
       await refresh();
@@ -302,15 +304,43 @@ export default function App() {
     <div style={pageStyle}>
       <div style={S.header}>
         <span style={S.headerTitle}>BuktiScan Agent v{AGENT_VERSION}</span>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>
-          {status.recording ? (
-            <span style={{ color: "#fbbf24" }}>
-              ● Merekam {status.lastScan ?? ""}
-            </span>
-          ) : (
-            <span style={{ color: "#86efac" }}>● Siap scan</span>
-          )}
-        </span>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <span style={{ fontSize: 12, opacity: 0.8 }}>
+            {status.recording ? (
+              <span style={{ color: "#fbbf24" }}>
+                ● Merekam {status.lastScan ?? ""}
+              </span>
+            ) : (
+              <span style={{ color: "#86efac" }}>● Siap scan</span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onUnpair}
+            style={{
+              background: "none",
+              border: "1px solid rgba(255, 255, 255, 0.4)",
+              borderRadius: 6,
+              color: "#fff",
+              padding: "4px 10px",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 500,
+              marginLeft: 12,
+              transition: "background-color 0.2s ease, border-color 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.15)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.8)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+            }}
+          >
+            Keluar Session
+          </button>
+        </div>
       </div>
 
       <div style={S.tabBar}>
@@ -379,7 +409,13 @@ export default function App() {
           />
         )}
         {tab === "riwayat" && <TabRiwayat config={config} />}
-        {tab === "tentang" && <TabTentang config={config} agentVersion={AGENT_VERSION} />}
+        {tab === "tentang" && (
+          <TabTentang
+            config={config}
+            agentVersion={AGENT_VERSION}
+            onUnpair={onUnpair}
+          />
+        )}
       </div>
     </div>
   );
