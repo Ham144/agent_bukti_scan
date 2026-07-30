@@ -171,7 +171,6 @@ export function TabMonitor({ config }: { config: AgentConfig | null }) {
       >     
         ℹ️ <strong>Tips Monitor:</strong> Untuk Preview dan rekam stabil dan tidak patah patah, ganti video encoding menjadi h.264 di di <strong>Configuration - video and audio - video encoding</strong> 
       </div>
-
       {stopError ? <p style={S.error}>{stopError}</p> : null}
       {snapshotError ? <p style={S.error}>{snapshotError}</p> : null}
       {refreshError ? <p style={S.error}>{refreshError}</p> : null}

@@ -34,9 +34,12 @@ export interface RuntimeStatusView {
   lastScan: string | null;
   busyMessage: string | null;
   clipsDir: string;
+  clipsDirSecondary: string | null;
   workstationLabel?: string | null;
   localClipCount?: number;
   diskFreeBytes?: number | null;
+  diskFreeBytesSecondary?: number | null;
+  diskFreeSecondaryLabel?: string;
   diskLow?: boolean;
   diskFreeLabel?: string;
   scanners: ScannerLinkView[];
@@ -137,6 +140,10 @@ contextBridge.exposeInMainWorld("BuktiScanAgent", {
     ipcRenderer.invoke("agent:update-tts-settings", payload) as Promise<
       Record<string, unknown>
     >,
+  updateStorageSettings: (payload: { clipsDir?: string; clipsDirSecondary?: string | null }) =>
+    ipcRenderer.invoke("agent:update-storage-settings", payload) as Promise<
+      Record<string, unknown>
+    >,
   testTts: () => ipcRenderer.invoke("agent:test-tts") as Promise<void>,
   setMonitorMode: (enabled: boolean) =>
     ipcRenderer.invoke("agent:monitor-mode", enabled) as Promise<void>,
@@ -205,6 +212,10 @@ export interface BuktiScanAgentBridge {
     ttsEnabled?: boolean;
     ttsVolume?: number;
     hideTtsLanguageWarning?: boolean;
+  }) => Promise<Record<string, unknown>>;
+  updateStorageSettings: (payload: {
+    clipsDir?: string;
+    clipsDirSecondary?: string | null;
   }) => Promise<Record<string, unknown>>;
   testTts: () => Promise<void>;
   setMonitorMode: (enabled: boolean) => Promise<void>;

@@ -7,15 +7,29 @@ export const LOCAL_MEDIA_PORT = 19500;
 export class LocalMediaServer {
   private server: http.Server | null = null;
   private clipsDir = "";
+  private clipsDirSecondary = "";
 
-  start(clipsDir: string): void {
+  start(clipsDir: string, clipsDirSecondary?: string): void {
     if (this.server) {
       this.clipsDir = clipsDir;
+      this.clipsDirSecondary = clipsDirSecondary || "";
       return;
     }
 
     this.clipsDir = clipsDir;
+    this.clipsDirSecondary = clipsDirSecondary || "";
     this.server = http.createServer((req, res) => {
+      // Izinkan CORS agar frontend web admin di luar host bisa memutar/mendownload video
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type");
+
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       const url = new URL(req.url || "/", `http://127.0.0.1:${LOCAL_MEDIA_PORT}`);
 
       const clipMatch = url.pathname.match(/^\/clips\/(.+)\.mp4$/);
@@ -26,7 +40,7 @@ export class LocalMediaServer {
       }
 
       const invoiceSafe = decodeURIComponent(clipMatch[1]);
-      const filePath = findClipFilePath(this.clipsDir, invoiceSafe);
+      const filePath = findClipFilePath(this.clipsDir, invoiceSafe, this.clipsDirSecondary);
       if (!filePath || !fs.existsSync(filePath)) {
         res.writeHead(404);
         res.end();
@@ -58,7 +72,7 @@ export class LocalMediaServer {
       }
     });
 
-    this.server.listen(LOCAL_MEDIA_PORT, "127.0.0.1");
+    this.server.listen(LOCAL_MEDIA_PORT, "0.0.0.0");
   }
 
   stop(): void {
@@ -66,6 +80,7 @@ export class LocalMediaServer {
       this.server.close();
       this.server = null;
       this.clipsDir = "";
+      this.clipsDirSecondary = "";
     }
   }
 }

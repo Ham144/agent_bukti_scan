@@ -277,7 +277,7 @@ ipcMain.handle("agent:get-recent-scans", async () => {
   return scans.map((scan) => {
     let hasLocalFile = false;
     if (scan.status === "COMPLETED" && config.clipsDir) {
-      const filePath = resolveClipPath(config.clipsDir, scan.invoiceNumber);
+      const filePath = resolveClipPath(config.clipsDir, scan.invoiceNumber, config.clipsDirSecondary);
       hasLocalFile = filePath ? fs.existsSync(filePath) : false;
     }
     return {
@@ -303,7 +303,7 @@ ipcMain.handle("agent:list-invoice-scans", async (_evt, query: {
   const items = data.items.map((scan) => {
     let hasLocalFile = false;
     if (scan.status === "COMPLETED" && config.clipsDir) {
-      const filePath = resolveClipPath(config.clipsDir, scan.invoiceNumber);
+      const filePath = resolveClipPath(config.clipsDir, scan.invoiceNumber, config.clipsDirSecondary);
       hasLocalFile = filePath ? fs.existsSync(filePath) : false;
     }
     return {
@@ -320,7 +320,7 @@ ipcMain.handle("agent:list-invoice-scans", async (_evt, query: {
 ipcMain.handle("agent:open-clip-file", async (_evt, invoiceNumber: string) => {
   const config = runtime?.getConfig() ?? loadConfig();
   if (config.clipsDir) {
-    const filePath = resolveClipPath(config.clipsDir, invoiceNumber);
+    const filePath = resolveClipPath(config.clipsDir, invoiceNumber, config.clipsDirSecondary);
     if (filePath && fs.existsSync(filePath)) {
       await shell.openPath(filePath);
     } else {
@@ -332,7 +332,7 @@ ipcMain.handle("agent:open-clip-file", async (_evt, invoiceNumber: string) => {
 ipcMain.handle("agent:show-clip-in-folder", async (_evt, invoiceNumber: string) => {
   const config = runtime?.getConfig() ?? loadConfig();
   if (config.clipsDir) {
-    const filePath = resolveClipPath(config.clipsDir, invoiceNumber);
+    const filePath = resolveClipPath(config.clipsDir, invoiceNumber, config.clipsDirSecondary);
     if (filePath && fs.existsSync(filePath)) {
       shell.showItemInFolder(filePath);
     } else {
@@ -367,6 +367,15 @@ ipcMain.handle(
   (_evt, payload: { ttsEnabled?: boolean; ttsVolume?: number; hideTtsLanguageWarning?: boolean }) => {
     if (!runtime) throw new Error("Agent belum siap");
     return runtime.updateTtsSettings(payload);
+  },
+);
+
+ipcMain.handle(
+  "agent:update-storage-settings",
+  (_evt, payload: { clipsDir?: string; clipsDirSecondary?: string | null }) => {
+    console.log("IPC Main: Menerima sinyal agent:update-storage-settings dengan payload:", payload);
+    if (!runtime) throw new Error("Agent belum siap");
+    return runtime.updateStorageSettings(payload);
   },
 );
 

@@ -242,4 +242,21 @@ export class AgentApiClient {
     );
     return res.data as { completed: number; imported: number; skipped: number };
   }
+
+  async updateStorageSettings(storageDirs: {
+    clipsDir?: string;
+    clipsDirSecondary?: string | null;
+  }) {
+
+    console.log(storageDirs);
+    const workstationId = this.config.workstationId;
+    if (!workstationId) throw new Error("Workstation ID tidak ditemukan");
+
+    const res = await this.http.put(
+      `/api/workstation/${workstationId}/agent/storage-settings`,
+      storageDirs,
+      { headers: this.authHeaders() },
+    );
+    return res.data;
+  }
 }

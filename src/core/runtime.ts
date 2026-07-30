@@ -62,9 +62,12 @@ export interface RuntimeStatus {
   lastScan: string | null;
   busyMessage: string | null;
   clipsDir: string;
+  clipsDirSecondary: string | null;
   workstationLabel: string | null;
   localClipCount: number;
   diskFreeBytes: number | null;
+  diskFreeBytesSecondary: number | null;
+  diskFreeSecondaryLabel: string;
   diskLow: boolean;
   diskFreeLabel: string;
   scanners: ScannerLinkStatus[];
@@ -113,9 +116,12 @@ export class AgentRuntime {
     lastScan: null,
     busyMessage: null,
     clipsDir: "",
+    clipsDirSecondary: null,
     workstationLabel: null,
     localClipCount: 0,
     diskFreeBytes: null,
+    diskFreeBytesSecondary: null,
+    diskFreeSecondaryLabel: "—",
     diskLow: false,
     diskFreeLabel: "—",
     scanners: [],
@@ -133,6 +139,7 @@ export class AgentRuntime {
   constructor(config?: AgentConfig) {
     this.config = config ?? loadConfig();
     this.status.clipsDir = this.config.clipsDir;
+    this.status.clipsDirSecondary = this.config.clipsDirSecondary ?? null;
     this.status.clipRetentionDays = this.config.clipRetentionDays ?? 14;
     this.api = new AgentApiClient(this.config);
     this.status.paired = Boolean(this.config.deviceToken);
@@ -141,7 +148,9 @@ export class AgentRuntime {
   getStatus(): RuntimeStatus {
     this.status.localClipCount = listLocalClipFiles(
       this.config.clipsDir,
+      this.config.clipsDirSecondary,
     ).length;
+    this.status.clipsDirSecondary = this.config.clipsDirSecondary ?? null;
     this.status.workstationLabel = this.config.workstationLabel ?? null;
     this.refreshDiskStatus();
     this.updateScannerStatus();
@@ -238,6 +247,42 @@ export class AgentRuntime {
     this.status.diskFreeBytes = freeBytes;
     this.status.diskLow = isDiskLow(freeBytes);
     this.status.diskFreeLabel = formatFreeBytes(freeBytes);
+
+    if (this.config.clipsDirSecondary) {
+      const freeBytesSec = getFreeBytesForPath(this.config.clipsDirSecondary);
+      this.status.diskFreeBytesSecondary = freeBytesSec;
+      this.status.diskFreeSecondaryLabel = formatFreeBytes(freeBytesSec);
+      
+      const primaryLow = isDiskLow(freeBytes);
+      const secondaryLow = isDiskLow(freeBytesSec);
+      this.status.diskLow = primaryLow && secondaryLow;
+      
+      if (freeBytes !== null && freeBytesSec !== null) {
+        this.status.diskFreeBytes = freeBytes + freeBytesSec;
+        this.status.diskFreeLabel = formatFreeBytes(freeBytes + freeBytesSec);
+      }
+    } else {
+      this.status.diskFreeBytesSecondary = null;
+      this.status.diskFreeSecondaryLabel = "—";
+    }
+  }
+
+  private getActiveClipsDir(): string {
+    if (!this.config.clipsDirSecondary) {
+      return this.config.clipsDir;
+    }
+    try {
+      const freePrimary = getFreeBytesForPath(this.config.clipsDir);
+      const freeSecondary = getFreeBytesForPath(this.config.clipsDirSecondary);
+      if (freePrimary !== null && freeSecondary !== null) {
+        if (isDiskLow(freePrimary) && freeSecondary > freePrimary) {
+          return this.config.clipsDirSecondary;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return this.config.clipsDir;
   }
 
   private setTransientBusyMessage(message: string): void {
@@ -306,9 +351,13 @@ export class AgentRuntime {
     }
     this.status.recordingMaxDurationSec = next.recordingMaxDurationSec ?? null;
     this.status.clipsDir = this.config.clipsDir;
+    this.status.clipsDirSecondary = this.config.clipsDirSecondary ?? null;
     this.status.clipRetentionDays = this.config.clipRetentionDays ?? 14;
     fs.mkdirSync(this.config.clipsDir, { recursive: true });
-    this.mediaServer.start(this.config.clipsDir);
+    if (this.config.clipsDirSecondary) {
+      fs.mkdirSync(this.config.clipsDirSecondary, { recursive: true });
+    }
+    this.mediaServer.start(this.config.clipsDir, this.config.clipsDirSecondary);
     saveConfig(this.config);
 
     if (!next.scanners.length) {
@@ -738,14 +787,15 @@ export class AgentRuntime {
         scanner.cctv.password,
       );
 
-      fs.mkdirSync(this.config.clipsDir, { recursive: true });
+      const targetDir = this.getActiveClipsDir();
+      fs.mkdirSync(targetDir, { recursive: true });
       await this.withCctvLock(scanner.cctv.id, () =>
         this.recorder.start({
           scanId: scan.id,
           cctvConfigId: scanner.cctv.id,
           invoiceNumber: scan.invoiceNumber,
           rtspUrl,
-          clipsDir: this.config.clipsDir,
+          clipsDir: targetDir,
           operatorName: scanner.assignedUsername,
         }),
       );
@@ -804,7 +854,7 @@ export class AgentRuntime {
         }
 
         if (!localPath) {
-          localPath = resolveClipPath(this.config.clipsDir, row.invoiceNumber);
+          localPath = resolveClipPath(this.config.clipsDir, row.invoiceNumber, this.config.clipsDirSecondary);
         }
 
         if (localPath) {
@@ -822,7 +872,7 @@ export class AgentRuntime {
 
   private async reconcileLocalClips(): Promise<void> {
     if (this.reconcileLock || !this.config.deviceToken) return;
-    const clips = listLocalClipFiles(this.config.clipsDir);
+    const clips = listLocalClipFiles(this.config.clipsDir, this.config.clipsDirSecondary);
     if (!clips.length) return;
 
     this.reconcileLock = true;
@@ -865,13 +915,15 @@ export class AgentRuntime {
               scanner?.assignedUsername ?? null,
               scanner?.label ?? null,
             );
+            const targetDir = this.getActiveClipsDir();
+            fs.mkdirSync(targetDir, { recursive: true });
             await this.withCctvLock(cctvId, () =>
               this.recorder.start({
                 scanId: row.scanId,
                 cctvConfigId: cctvId,
                 invoiceNumber: row.invoiceNumber,
                 rtspUrl,
-                clipsDir: this.config.clipsDir,
+                clipsDir: targetDir,
                 operatorName: scanner?.assignedUsername,
               }),
             );
@@ -912,8 +964,12 @@ export class AgentRuntime {
 
     this.clearStartupError();
 
-    fs.mkdirSync(this.config.clipsDir, { recursive: true });
-    this.mediaServer.start(this.config.clipsDir);
+    const targetDir = this.getActiveClipsDir();
+    fs.mkdirSync(targetDir, { recursive: true });
+    if (this.config.clipsDirSecondary) {
+      fs.mkdirSync(this.config.clipsDirSecondary, { recursive: true });
+    }
+    this.mediaServer.start(this.config.clipsDir, this.config.clipsDirSecondary);
     await this.syncRemote();
     await this.reconcileLocalClips();
 
@@ -946,14 +1002,126 @@ export class AgentRuntime {
       6 * 60 * 60 * 1000,
     );
   }
-
   private runClipCleanup(): void {
     const days = this.config.clipRetentionDays ?? 14;
     if (days <= 0) return;
-    const deleted = this.purgeOldClips(days);
-    this.status.lastCleanupDeleted = deleted;
-    this.status.lastCleanupAt = new Date().toISOString();
+    try {
+      const deleted = this.purgeOldClips(days);
+      this.status.lastCleanupDeleted = deleted;
+      this.status.lastCleanupAt = new Date().toISOString();
+    } catch (err) {
+      console.error("Gagal melakukan pembersihan klip:", err);
+      // Agar tidak menyetop program, cukup simpan pesan error di status
+      this.status.lastError = err instanceof Error ? `Cleanup gagal: ${err.message}` : "Cleanup gagal";
+    }
   }
+
+  purgeOldClips(retentionDays = 30): number {
+    let deleted = 0;
+    deleted += this.purgeOldClipsForDir(this.config.clipsDir, retentionDays);
+    if (this.config.clipsDirSecondary) {
+      deleted += this.purgeOldClipsForDir(this.config.clipsDirSecondary, retentionDays);
+    }
+    return deleted;
+  }
+
+  private purgeOldClipsForDir(dir: string, retentionDays = 30): number {
+    if (!fs.existsSync(dir) || retentionDays <= 0) return 0;
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    let deleted = 0;
+
+    const purgeMp4InDir = (targetDir: string) => {
+      if (!fs.existsSync(targetDir)) return;
+      try {
+        for (const name of fs.readdirSync(targetDir)) {
+          if (!name.toLowerCase().endsWith(".mp4")) continue;
+          const filePath = path.join(targetDir, name);
+          try {
+            const stat = fs.statSync(filePath);
+            if (stat.mtimeMs < cutoff) {
+              fs.unlinkSync(filePath);
+              deleted += 1;
+            }
+          } catch {
+            /* ignore individual file errors */
+          }
+        }
+      } catch {
+        /* ignore directory read errors */
+      }
+    };
+
+    // 1. Bersihkan file MP4 di root
+    purgeMp4InDir(dir);
+
+    // 2. Bersihkan file MP4 di dalam folder bulanan YYYY-MM
+    try {
+      for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!name.isDirectory() || !MONTHLY_CLIPS_DIR_PATTERN.test(name.name)) {
+          continue;
+        }
+        const monthDir = path.join(dir, name.name);
+        purgeMp4InDir(monthDir);
+        try {
+          const remaining = fs.readdirSync(monthDir);
+          if (remaining.length === 0) fs.rmdirSync(monthDir);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // 3. Bersihkan sisa folder sementara (_parts) yang sudah ditinggalkan (misal berumur > 2 hari)
+    const partsDir = path.join(dir, "_parts");
+    if (fs.existsSync(partsDir)) {
+      try {
+        const partsCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000; // 2 hari
+        for (const name of fs.readdirSync(partsDir, { withFileTypes: true })) {
+          if (!name.isDirectory()) continue;
+          const invoicePartsDir = path.join(partsDir, name.name);
+          try {
+            const stat = fs.statSync(invoicePartsDir);
+            if (stat.mtimeMs < partsCutoff) {
+              fs.rmSync(invoicePartsDir, { recursive: true, force: true });
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return deleted;
+  }
+
+  updateStorageSettings(settings: {
+    clipsDir?: string;
+    clipsDirSecondary?: string | null;
+  }): AgentConfig {
+    console.log("AgentRuntime: Menjalankan updateStorageSettings dengan settings:", settings);
+    if (settings.clipsDir !== undefined) {
+      this.config.clipsDir = settings.clipsDir;
+      this.status.clipsDir = settings.clipsDir;
+    }
+    if (settings.clipsDirSecondary !== undefined) {
+      this.config.clipsDirSecondary = settings.clipsDirSecondary || undefined;
+      this.status.clipsDirSecondary = settings.clipsDirSecondary || null;
+    }
+    saveConfig(this.config);
+
+    fs.mkdirSync(this.config.clipsDir, { recursive: true });
+    if (this.config.clipsDirSecondary) {
+      fs.mkdirSync(this.config.clipsDirSecondary, { recursive: true });
+    }
+    this.mediaServer.start(this.config.clipsDir, this.config.clipsDirSecondary);
+
+    return { ...this.config };
+  }
+
 
   async stop(): Promise<void> {
     if (this.pollTimer) clearInterval(this.pollTimer);
@@ -966,45 +1134,4 @@ export class AgentRuntime {
     await this.serial.disconnectAll();
   }
 
-  purgeOldClips(retentionDays = 30): number {
-    const dir = this.config.clipsDir;
-    if (!fs.existsSync(dir) || retentionDays <= 0) return 0;
-    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-    let deleted = 0;
-
-    const purgeMp4InDir = (targetDir: string) => {
-      if (!fs.existsSync(targetDir)) return;
-      for (const name of fs.readdirSync(targetDir)) {
-        if (!name.toLowerCase().endsWith(".mp4")) continue;
-        const filePath = path.join(targetDir, name);
-        try {
-          const stat = fs.statSync(filePath);
-          if (stat.mtimeMs < cutoff) {
-            fs.unlinkSync(filePath);
-            deleted += 1;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    };
-
-    purgeMp4InDir(dir);
-
-    for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!name.isDirectory() || !MONTHLY_CLIPS_DIR_PATTERN.test(name.name)) {
-        continue;
-      }
-      const monthDir = path.join(dir, name.name);
-      purgeMp4InDir(monthDir);
-      try {
-        const remaining = fs.readdirSync(monthDir);
-        if (remaining.length === 0) fs.rmdirSync(monthDir);
-      } catch {
-        /* ignore */
-      }
-    }
-
-    return deleted;
-  }
 }

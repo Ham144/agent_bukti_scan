@@ -16,6 +16,7 @@ export interface AgentConfig {
   organizationName?: string;
   workstationLabel?: string;
   clipsDir: string;
+  clipsDirSecondary?: string;
   ttsEnabled?: boolean;
   ttsVolume?: number;
   clipRetentionDays?: number;
@@ -48,6 +49,7 @@ export function loadConfig(): AgentConfig {
       return {
         apiBaseUrl: raw.apiBaseUrl || DEFAULT_API,
         clipsDir: raw.clipsDir || defaultClipsDir(),
+        clipsDirSecondary: raw.clipsDirSecondary,
         deviceToken: raw.deviceToken,
         workstationId: raw.workstationId,
         organizationName: raw.organizationName,

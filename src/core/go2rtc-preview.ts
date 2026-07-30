@@ -166,13 +166,13 @@ export class Go2RtcPreviewManager {
 
     const yaml = [
       "api:",
-      `  listen: "127.0.0.1:${GO2RTC_API_PORT}"`,
+      `  listen: "0.0.0.0:${GO2RTC_API_PORT}"`,
       "",
       "rtsp:",
-      '  listen: "127.0.0.1:8554"',
+      '  listen: "0.0.0.0:8554"',
       "",
       "webrtc:",
-      '  listen: "127.0.0.1:8555"',
+      '  listen: "0.0.0.0:8555"',
       "  ice_servers: []",
       "  filters:",
       "    loopback: true",

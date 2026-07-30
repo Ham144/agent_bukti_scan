@@ -40,7 +40,9 @@ function formatDuration(scannedAt: string, completedAt: string | null): string {
   return `${minutes}:${ss}`;
 }
 
-export function TabRiwayat({ config }: { config: AgentConfig | null }) {
+import type { RuntimeStatusView } from "../../../electron/preload";
+
+export function TabRiwayat({ config, status }: { config: AgentConfig | null; status: RuntimeStatusView | null }) {
   const [items, setItems] = useState<InvoiceScanListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,23 +134,52 @@ export function TabRiwayat({ config }: { config: AgentConfig | null }) {
 
   const getLocalFileBadge = (scan: InvoiceScanListItem) => {
     if (scan.status !== "COMPLETED") return null;
-    return scan.hasLocalFile ? (
-      <span
-        style={{
-          display: "inline-block",
-          border: "1px solid #86efac",
-          color: "#166534",
-          background: "#f0fdf4",
-          borderRadius: 4,
-          padding: "1px 6px",
-          fontSize: 10,
-          fontWeight: 600,
-          marginLeft: 6,
-        }}
-      >
-        Lokal OK
-      </span>
-    ) : (
+    if (scan.hasLocalFile) {
+      return (
+        <span
+          style={{
+            display: "inline-block",
+            border: "1px solid #86efac",
+            color: "#166534",
+            background: "#f0fdf4",
+            borderRadius: 4,
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 600,
+            marginLeft: 6,
+          }}
+        >
+          Lokal OK
+        </span>
+      );
+    }
+
+    const retentionDays = status?.clipRetentionDays ?? 14;
+    const scannedTime = new Date(scan.scannedAt).getTime();
+    const isExpired = Date.now() - scannedTime > retentionDays * 24 * 60 * 60 * 1000;
+
+    if (isExpired && retentionDays > 0) {
+      return (
+        <span
+          style={{
+            display: "inline-block",
+            border: "1px solid #fca5a5",
+            color: "#991b1b",
+            background: "#fef2f2",
+            borderRadius: 4,
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 600,
+            marginLeft: 6,
+          }}
+          title={`Video otomatis terhapus karena melewati batas retensi ${retentionDays} hari.`}
+        >
+          Terhapus (Expired)
+        </span>
+      );
+    }
+
+    return (
       <span
         style={{
           display: "inline-block",
@@ -161,7 +192,7 @@ export function TabRiwayat({ config }: { config: AgentConfig | null }) {
           fontWeight: 600,
           marginLeft: 6,
         }}
-        title="File video tidak ditemukan secara lokal (misal sudah terhapus otomatis oleh sistem retensi)."
+        title="File video tidak ditemukan secara lokal."
       >
         Terhapus
       </span>

@@ -9,3 +9,6 @@ Agent Progress & Features Checklist:
 [x] Penanganan Resi Duplikat - Penomoran otomatis `(2)`, `(3)`, dst. untuk menjaga riwayat (tidak menimpa file)
 [x] Kestabilan UI Live Preview Sub-stream - Menghilangkan bug indikator perekaman berkedip di Tab Monitor
 [x] Startup Rekaman Instan - Penghapusan cooldown dan optimasi parameter RTSP FFmpeg untuk start perekaman seketika
+[x] add: merge disk, fitur untuk pakai 2 local disk yang beda, ini di tentuin di agent saja
+[] add: tampilkan tanda di  history yang video nya udah otomatis terhapus karena melewati clipRetentionDays
+[] bisa streaming video yang tersimpan di agent dari komputer mana saja asal satu jaringan

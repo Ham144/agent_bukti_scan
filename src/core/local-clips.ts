@@ -56,21 +56,28 @@ function listMonthlyClipDirs(clipsDir: string): string[] {
     .sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
 }
 
-export function listLocalClipFiles(clipsDir: string): LocalClipFile[] {
-  if (!clipsDir || !fs.existsSync(clipsDir)) return [];
+export function listLocalClipFiles(clipsDir: string, clipsDirSecondary?: string): LocalClipFile[] {
+  if (!clipsDir) return [];
 
   const byInvoice = new Map<string, LocalClipFile>();
 
-  for (const clip of listMp4InDir(clipsDir)) {
-    byInvoice.set(clip.invoiceNumber, clip);
-  }
-
-  for (const monthDir of listMonthlyClipDirs(clipsDir)) {
-    for (const clip of listMp4InDir(monthDir)) {
-      if (!byInvoice.has(clip.invoiceNumber)) {
-        byInvoice.set(clip.invoiceNumber, clip);
+  const scanDir = (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    for (const clip of listMp4InDir(dir)) {
+      byInvoice.set(clip.invoiceNumber, clip);
+    }
+    for (const monthDir of listMonthlyClipDirs(dir)) {
+      for (const clip of listMp4InDir(monthDir)) {
+        if (!byInvoice.has(clip.invoiceNumber)) {
+          byInvoice.set(clip.invoiceNumber, clip);
+        }
       }
     }
+  };
+
+  scanDir(clipsDir);
+  if (clipsDirSecondary) {
+    scanDir(clipsDirSecondary);
   }
 
   return [...byInvoice.values()];
@@ -79,36 +86,48 @@ export function listLocalClipFiles(clipsDir: string): LocalClipFile[] {
 export function resolveClipPath(
   clipsDir: string,
   invoiceNumber: string,
+  clipsDirSecondary?: string,
 ): string | null {
   const invoiceSafe = safeInvoiceFileName(invoiceNumber);
 
-  for (const monthDir of listMonthlyClipDirs(clipsDir)) {
-    if (!fs.existsSync(monthDir)) continue;
-    const files = fs.readdirSync(monthDir);
-    for (const name of files) {
-      if (!name.toLowerCase().endsWith(".mp4")) continue;
-      const base = name.replace(/\.mp4$/i, "");
-      const firstPart = base.split("--")[0];
-      if (firstPart === invoiceSafe) {
-        const fullPath = path.join(monthDir, name);
-        const clip = isValidClipFile(fullPath);
-        if (clip) return clip.localClipPath;
+  const checkDir = (dir: string): string | null => {
+    for (const monthDir of listMonthlyClipDirs(dir)) {
+      if (!fs.existsSync(monthDir)) continue;
+      const files = fs.readdirSync(monthDir);
+      for (const name of files) {
+        if (!name.toLowerCase().endsWith(".mp4")) continue;
+        const base = name.replace(/\.mp4$/i, "");
+        const firstPart = base.split("--")[0];
+        if (firstPart === invoiceSafe) {
+          const fullPath = path.join(monthDir, name);
+          const clip = isValidClipFile(fullPath);
+          if (clip) return clip.localClipPath;
+        }
       }
     }
-  }
 
-  if (fs.existsSync(clipsDir)) {
-    const files = fs.readdirSync(clipsDir);
-    for (const name of files) {
-      if (!name.toLowerCase().endsWith(".mp4")) continue;
-      const base = name.replace(/\.mp4$/i, "");
-      const firstPart = base.split("--")[0];
-      if (firstPart === invoiceSafe) {
-        const fullPath = path.join(clipsDir, name);
-        const clip = isValidClipFile(fullPath);
-        if (clip) return clip.localClipPath;
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir);
+      for (const name of files) {
+        if (!name.toLowerCase().endsWith(".mp4")) continue;
+        const base = name.replace(/\.mp4$/i, "");
+        const firstPart = base.split("--")[0];
+        if (firstPart === invoiceSafe) {
+          const fullPath = path.join(dir, name);
+          const clip = isValidClipFile(fullPath);
+          if (clip) return clip.localClipPath;
+        }
       }
     }
+    return null;
+  };
+
+  const primaryResult = checkDir(clipsDir);
+  if (primaryResult) return primaryResult;
+
+  if (clipsDirSecondary) {
+    const secondaryResult = checkDir(clipsDirSecondary);
+    if (secondaryResult) return secondaryResult;
   }
 
   return null;
@@ -117,6 +136,7 @@ export function resolveClipPath(
 export function findClipFilePath(
   clipsDir: string,
   invoiceSafe: string,
+  clipsDirSecondary?: string,
 ): string | null {
-  return resolveClipPath(clipsDir, invoiceSafe);
+  return resolveClipPath(clipsDir, invoiceSafe, clipsDirSecondary);
 }

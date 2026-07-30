@@ -26,6 +26,7 @@ export interface AgentConfig {
   organizationName?: string;
   workstationLabel?: string;
   clipsDir: string;
+  clipsDirSecondary?: string;
   ttsEnabled?: boolean;
   ttsVolume?: number;
   hideTtsLanguageWarning?: boolean;
@@ -408,7 +409,7 @@ export default function App() {
             onSync={() => void refresh({ full: true })}
           />
         )}
-        {tab === "riwayat" && <TabRiwayat config={config} />}
+        {tab === "riwayat" && <TabRiwayat config={config} status={status} />}
         {tab === "tentang" && (
           <TabTentang
             config={config}
